@@ -32,18 +32,18 @@ mongoose
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.post("/register", register);
-app.post("/login", login);
+app.post("/api/register", register);
+app.post("/api/login", login);
 
-app.get("/get-groups", validateUser, getGroups);
-app.post("/create-group", validateUser, createGroup);
-app.get("/get-group-by-id", validateUser, getGroupDetails);
+app.get("/api/get-groups", validateUser, getGroups);
+app.post("/api/create-group", validateUser, createGroup);
+app.get("/api/get-group-by-id", validateUser, getGroupDetails);
 
-app.post("/add-member", validateUser, addMember);
-app.post("/remove-member", validateUser, removeMember);
+app.post("/api/add-member", validateUser, addMember);
+app.post("/api/remove-member", validateUser, removeMember);
 
-app.post("/add-expense", validateUser, addExpense);
-app.get("/get-expenses", validateUser, getExpenses);
+app.post("/api/add-expense", validateUser, addExpense);
+app.get("/api/get-expenses", validateUser, getExpenses);
 
 app.listen(8080, () => {
   console.log("Server running on port 8080");
