@@ -1,4 +1,4 @@
 {
- "functions" :{"index.js" :{ "runtime" : "nodejs20.x"}}, 
+ "functions" :{"index.js" :{ "runtime" : "@vercel/node@3.0.7"}}, 
  "rewrites": [{"source":"/(.*)", "destination":"/index.js"}]
 }
