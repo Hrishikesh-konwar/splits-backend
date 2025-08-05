@@ -11,7 +11,7 @@ const membersSchema = new mongoose.Schema({
     type: String,
   },
   contact: {
-    type: Number,
+    type: String,
   },
 });
 
