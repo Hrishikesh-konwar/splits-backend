@@ -45,6 +45,10 @@ app.post("/api/remove-member", validateUser, removeMember);
 app.post("/api/add-expense", validateUser, addExpense);
 app.get("/api/get-expenses", validateUser, getExpenses);
 
+app.get("/check", (req,res) => {
+ res.status(200).send("server is up and running")
+}
+
 app.listen(8080, () => {
   console.log("Server running on port 8080");
 });
