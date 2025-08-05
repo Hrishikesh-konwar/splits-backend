@@ -13,6 +13,7 @@ import {
   removeMember,
   addExpense,
   getExpenses,
+  addSettlement,
 } from "./controller/index.js";
 import { validateUser } from "./middleware.js";
 
@@ -44,6 +45,8 @@ app.post("/api/remove-member", validateUser, removeMember);
 
 app.post("/api/add-expense", validateUser, addExpense);
 app.get("/api/get-expenses", validateUser, getExpenses);
+app.post("/api/add-settlement", validateUser, addSettlement);
+
 
 app.get("/check", (req,res) => {
  res.status(200).send("server is up and running")

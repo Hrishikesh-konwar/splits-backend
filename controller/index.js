@@ -189,7 +189,7 @@ export const addExpense = async (req, res) => {
     .json({ message: "Expense added successfully", expense });
 };
 
-const getGroupedSettlements = async (expenses) => {
+const getGroupedSettlements = async (expenses, settlements = []) => {
   // Track direct debts between users based on actual expenses
   const debts = {};
 
@@ -219,7 +219,36 @@ const getGroupedSettlements = async (expenses) => {
     }
   }
 
-  // Step 2: Net out mutual debts (if A owes B and B owes A)
+  // Step 2: Subtract settled amounts
+  for (const settlement of settlements) {
+    const { from, to, amount, fromName, toName } = settlement;
+    
+    // Find debtor by contact
+    let debtorId = null;
+    let creditorId = null;
+    
+    for (const [userId, userData] of Object.entries(debts)) {
+      // Find users by name (since settlement uses contact but debts use user id)
+      if (userData.name === fromName) {
+        debtorId = userId;
+      }
+      if (userData.name === toName) {
+        creditorId = userId;
+      }
+    }
+    
+    // Reduce the debt by the settled amount
+    if (debtorId && creditorId && debts[debtorId] && debts[debtorId].owes[creditorId]) {
+      debts[debtorId].owes[creditorId].amount -= amount;
+      
+      // Remove debt if fully settled
+      if (debts[debtorId].owes[creditorId].amount <= 0.01) {
+        delete debts[debtorId].owes[creditorId];
+      }
+    }
+  }
+
+  // Step 3: Net out mutual debts (if A owes B and B owes A)
   for (const [debtorId, debtorData] of Object.entries(debts)) {
     for (const [creditorId, creditorInfo] of Object.entries(debtorData.owes)) {
       if (debts[creditorId] && debts[creditorId].owes[debtorId]) {
@@ -240,7 +269,7 @@ const getGroupedSettlements = async (expenses) => {
     }
   }
 
-  // Step 3: Format the result
+  // Step 4: Format the result
   const result = [];
   for (const [debtorId, debtorData] of Object.entries(debts)) {
     const owesArray = [];
@@ -263,6 +292,45 @@ const getGroupedSettlements = async (expenses) => {
   return result;
 };
 
+export const addSettlement = async (req, res) => {
+  try {
+    const { groupId, from, to, amount, fromName, toName } = req.body;
+    
+    if (!groupId || !from || !to || !amount || !fromName || !toName) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const group = await Group.findOne({ id: groupId });
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    // Add settlement record
+    const settlement = {
+      from,
+      to,
+      amount,
+      fromName,
+      toName,
+      settledAt: new Date()
+    };
+
+    group.settlements.push(settlement);
+    await group.save();
+
+    return res.status(200).json({ 
+      message: "Settlement recorded successfully", 
+      settlement 
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
+  }
+};
+
 export const getExpenses = async (req, res) => {
   const { groupId } = req.query;
   if (!groupId) {
@@ -272,262 +340,19 @@ export const getExpenses = async (req, res) => {
   // Fetch the group by ID
   const group = await Group.findOne({ id: groupId });
 
-  //   const group = {
-  //     id: "group-001-uuid",
-  //     groupName: "Friends Trip to Goa",
-  //     members: [
-  //       {
-  //         id: "user-001-uuid",
-  //         name: "hrishi",
-  //         contact: 9876543210,
-  //       },
-  //       {
-  //         id: "user-002-uuid",
-  //         name: "nimi",
-  //         contact: 9876543211,
-  //       },
-  //       {
-  //         id: "user-003-uuid",
-  //         name: "bis",
-  //         contact: 9876543212,
-  //       },
-  //       {
-  //         id: "user-004-uuid",
-  //         name: "manas",
-  //         contact: 9876543213,
-  //       },
-  //     ],
-  //     expenses: [
-  //       {
-  //         id: "expense-001-uuid",
-  //         amount: 2400,
-  //         description: "Hotel booking for 2 nights",
-  //         paidBy: {
-  //           id: "user-001-uuid",
-  //           name: "hrishi",
-  //           contact: 9876543210,
-  //         },
-  //         sharedby: [
-  //           {
-  //             id: "user-001-uuid",
-  //             name: "hrishi",
-  //             contact: 9876543210,
-  //           },
-  //           {
-  //             id: "user-002-uuid",
-  //             name: "nimi",
-  //             contact: 9876543211,
-  //           },
-  //           {
-  //             id: "user-003-uuid",
-  //             name: "bis",
-  //             contact: 9876543212,
-  //           },
-  //           {
-  //             id: "user-004-uuid",
-  //             name: "manas",
-  //             contact: 9876543213,
-  //           },
-  //         ],
-  //       },
-  //       {
-  //         id: "expense-002-uuid",
-  //         amount: 800,
-  //         description: "Dinner at beach restaurant",
-  //         paidBy: {
-  //           id: "user-002-uuid",
-  //           name: "nimi",
-  //           contact: 9876543211,
-  //         },
-  //         sharedby: [
-  //           {
-  //             id: "user-001-uuid",
-  //             name: "hrishi",
-  //             contact: 9876543210,
-  //           },
-  //           {
-  //             id: "user-002-uuid",
-  //             name: "nimi",
-  //             contact: 9876543211,
-  //           },
-  //           {
-  //             id: "user-003-uuid",
-  //             name: "bis",
-  //             contact: 9876543212,
-  //           },
-  //           {
-  //             id: "user-004-uuid",
-  //             name: "manas",
-  //             contact: 9876543213,
-  //           },
-  //         ],
-  //       },
-  //       {
-  //         id: "expense-003-uuid",
-  //         amount: 1200,
-  //         description: "Cab fare to airport",
-  //         paidBy: {
-  //           id: "user-003-uuid",
-  //           name: "bis",
-  //           contact: 9876543212,
-  //         },
-  //         sharedby: [
-  //           {
-  //             id: "user-001-uuid",
-  //             name: "hrishi",
-  //             contact: 9876543210,
-  //           },
-  //           {
-  //             id: "user-002-uuid",
-  //             name: "nimi",
-  //             contact: 9876543211,
-  //           },
-  //           {
-  //             id: "user-003-uuid",
-  //             name: "bis",
-  //             contact: 9876543212,
-  //           },
-  //           {
-  //             id: "user-004-uuid",
-  //             name: "manas",
-  //             contact: 9876543213,
-  //           },
-  //         ],
-  //       },
-  //       {
-  //         id: "expense-004-uuid",
-  //         amount: 450,
-  //         description: "Breakfast groceries",
-  //         paidBy: {
-  //           id: "user-004-uuid",
-  //           name: "manas",
-  //           contact: 9876543213,
-  //         },
-  //         sharedby: [
-  //           {
-  //             id: "user-002-uuid",
-  //             name: "nimi",
-  //             contact: 9876543211,
-  //           },
-  //           {
-  //             id: "user-004-uuid",
-  //             name: "manas",
-  //             contact: 9876543213,
-  //           },
-  //         ],
-  //       },
-  //       {
-  //         id: "expense-005-uuid",
-  //         amount: 1800,
-  //         description: "Water sports activities",
-  //         paidBy: {
-  //           id: "user-001-uuid",
-  //           name: "hrishi",
-  //           contact: 9876543210,
-  //         },
-  //         sharedby: [
-  //           {
-  //             id: "user-001-uuid",
-  //             name: "hrishi",
-  //             contact: 9876543210,
-  //           },
-  //           {
-  //             id: "user-003-uuid",
-  //             name: "bis",
-  //             contact: 9876543212,
-  //           },
-  //           {
-  //             id: "user-004-uuid",
-  //             name: "manas",
-  //             contact: 9876543213,
-  //           },
-  //         ],
-  //       },
-  //       {
-  //         id: "expense-006-uuid",
-  //         amount: 320,
-  //         description: "Evening snacks and drinks",
-  //         paidBy: {
-  //           id: "user-002-uuid",
-  //           name: "nimi",
-  //           contact: 9876543211,
-  //         },
-  //         sharedby: [
-  //           {
-  //             id: "user-001-uuid",
-  //             name: "hrishi",
-  //             contact: 9876543210,
-  //           },
-  //           {
-  //             id: "user-002-uuid",
-  //             name: "nimi",
-  //             contact: 9876543211,
-  //           },
-  //         ],
-  //       },
-  //       {
-  //         id: "expense-007-uuid",
-  //         amount: 8000,
-  //         description: "Car rental for 3 days",
-  //         paidBy: {
-  //           id: "user-001-uuid",
-  //           name: "hrishi",
-  //           contact: 9876543210,
-  //         },
-  //         sharedby: [
-  //           {
-  //             id: "user-001-uuid",
-  //             name: "hrishi",
-  //             contact: 9876543210,
-  //           },
-  //           {
-  //             id: "user-002-uuid",
-  //             name: "nimi",
-  //             contact: 9876543211,
-  //           },
-  //           {
-  //             id: "user-003-uuid",
-  //             name: "bis",
-  //             contact: 9876543212,
-  //           },
-  //           {
-  //             id: "user-004-uuid",
-  //             name: "manas",
-  //             contact: 9876543213,
-  //           },
-  //         ],
-  //       },
-  //     ],
-  //   };
-
   if (!group) {
     return res.status(404).json({ message: "Group not found" });
   }
 
-  const groupedSettlements = await getGroupedSettlements(group.expenses);
+  const groupedSettlements = await getGroupedSettlements(group.expenses, group.settlements || []);
 
   return res.status(200).json({
     message: "Expenses retrieved successfully",
     expenses: group.expenses,
     balance: groupedSettlements,
+    settlements: group.settlements || []
   });
 };
-
-// export const getBalance = async (req, res) => {
-//   const { groupId } = req.params;
-//   if (!groupId) {
-//       return res.status(400).json({ message: "Group ID is required" });
-//   }
-
-//   const group = await Group.findById(groupId);
-//   if (!group) {
-//       return res.status(404).json({ message: "Group not found" });
-//   }
-
-//   // Calculate balance for each member
-
-//   return res.status(200).json({ message: "Balance retrieved successfully", balance });
-// };
 
 export const getGroupDetails = async (req, res) => {
   const { groupId } = req.query;
