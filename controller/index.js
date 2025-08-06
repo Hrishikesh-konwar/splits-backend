@@ -6,79 +6,103 @@ import { Group } from "../schema/groups.js";
 import { get } from "mongoose";
 
 export const register = async (req, res) => {
-  const { name, contact, password } = req.body;
+  try {
+    const { name, contact, password } = req.body;
 
-  if (!name || !contact || !password) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-
-  const existingMember = await User.findOne({ contact });
-  if (existingMember) {
-    return res.status(400).json({ message: "User already exists" });
-  }
-
-  const user = {
-    name,
-    contact,
-    password: await bcrypt.hash(password, 10),
-  };
-
-  const result = await User.create(user);
-
-  if (!result) {
-    return res.status(500).json({ message: "User registration failed" });
-  }
-
-  const token = jwt.sign(
-    { id: result.id, name: result.name, contact: result.contact },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "1h",
+    if (!name || !contact || !password) {
+      return res.status(400).json({ message: "All fields are required" });
     }
-  );
-  return res
-    .status(200)
-    .json({ message: "User registered successfully", token });
+
+    const existingMember = await User.findOne({ contact });
+    if (existingMember) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    const user = {
+      name,
+      contact,
+      password: await bcrypt.hash(password, 10),
+    };
+
+    const result = await User.create(user);
+
+    if (!result) {
+      return res.status(500).json({ message: "User registration failed" });
+    }
+
+    const token = jwt.sign(
+      { id: result.id, name: result.name, contact: result.contact },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      }
+    );
+    return res
+      .status(200)
+      .json({ message: "User registered successfully", token });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
+  }
 };
 
 export const login = async (req, res) => {
-  const { contact, password } = req.body;
-  console.log("type of contact:", typeof contact);
-  if (!contact || !password) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-  const user = await User.findOne({ contact });
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
-  }
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
-
-  const token = jwt.sign(
-    { id: user.id, name: user.name, contact: user.contact },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "1h",
+  try {
+    const { contact, password } = req.body;
+    console.log("type of contact:", typeof contact);
+    if (!contact || !password) {
+      return res.status(400).json({ message: "All fields are required" });
     }
-  );
+    const user = await User.findOne({ contact });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-  return res
-    .status(200)
-    .json({ message: "User logged in successfully", token });
+    const token = jwt.sign(
+      { id: user.id, name: user.name, contact: user.contact },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      }
+    );
+
+    return res
+      .status(200)
+      .json({ message: "User logged in successfully", token });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
+  }
 };
 
 export const getGroups = async (req, res) => {
-  const user = req.user;
-  const { id, name, contact } = user;
-  const groups = await Group.find({
-    "members.contact": user.contact,
-  }).lean();
+  try {
+    const user = req.user;
+    const { id, name, contact } = user;
+    const groups = await Group.find({
+      "members.contact": user.contact,
+    }).lean();
 
-  return res
-    .status(200)
-    .json({ message: "Groups retrieved successfully", groups });
+    return res
+      .status(200)
+      .json({ message: "Groups retrieved successfully", groups });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
+  }
 };
 
 export const createGroup = async (req, res) => {
@@ -116,50 +140,66 @@ export const createGroup = async (req, res) => {
 };
 
 export const addMember = async (req, res) => {
-  const { groupId, memberContact } = req.body;
-  if (!groupId || !memberContact) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-  const group = await Group.findOne({ id: groupId });
-  if (!group) {
-    return res.status(404).json({ message: "Group not found" });
-  }
+  try {
+    const { groupId, memberContact } = req.body;
+    if (!groupId || !memberContact) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+    const group = await Group.findOne({ id: groupId });
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
 
-  const memberDetails = await User.findOne({ contact: memberContact });
-  if (!memberDetails) {
-    return res.status(404).json({ message: "Member not found" });
-  }
-  const existingMember = group.members.find(
-    (member) => member.contact === memberContact
-  );
-  if (existingMember) {
-    return res
-      .status(400)
-      .json({ message: "Member already exists in the group" });
-  }
-  // Add member to group
-  group.members.push(memberDetails);
-  await group.save();
+    const memberDetails = await User.findOne({ contact: memberContact });
+    if (!memberDetails) {
+      return res.status(404).json({ message: "Member not found" });
+    }
+    const existingMember = group.members.find(
+      (member) => member.contact === memberContact
+    );
+    if (existingMember) {
+      return res
+        .status(400)
+        .json({ message: "Member already exists in the group" });
+    }
+    // Add member to group
+    group.members.push(memberDetails);
+    await group.save();
 
-  return res.status(200).json({ message: "Member added successfully" });
+    return res.status(200).json({ message: "Member added successfully" });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
+  }
 };
 
 export const removeMember = async (req, res) => {
-  const { groupId, memberContact } = req.body;
-  if (!groupId || !memberContact) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-  const group = await Group.findOne({ id: groupId });
-  if (!group) {
-    return res.status(404).json({ message: "Group not found" });
-  }
+  try {
+    const { groupId, memberContact } = req.body;
+    if (!groupId || !memberContact) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+    const group = await Group.findOne({ id: groupId });
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
 
-  group.members = group.members.filter(
-    (member) => member.contact !== memberContact
-  );
-  await group.save();
+    group.members = group.members.filter(
+      (member) => member.contact !== memberContact
+    );
+    await group.save();
 
-  return res.status(200).json({ message: "Member removed successfully" });
+    return res.status(200).json({ message: "Member removed successfully" });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
+  }
 };
 
 // export const getMembers = async (req, res) => {
@@ -168,26 +208,34 @@ export const removeMember = async (req, res) => {
 // };
 
 export const addExpense = async (req, res) => {
-  const { groupId, amount, description, paidBy, sharedby } = req.body;
-  if (!groupId || !amount || !description || !paidBy || !sharedby) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
+  try {
+    const { groupId, amount, description, paidBy, sharedby } = req.body;
+    if (!groupId || !amount || !description || !paidBy || !sharedby) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
 
-  const group = await Group.findOne({ id: groupId });
-  if (!group) {
-    return res.status(404).json({ message: "Group not found" });
+    const group = await Group.findOne({ id: groupId });
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+    const expense = {
+      amount,
+      description,
+      paidBy,
+      sharedby,
+    };
+    group.expenses.push(expense);
+    await group.save();
+    return res
+      .status(200)
+      .json({ message: "Expense added successfully", expense });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
   }
-  const expense = {
-    amount,
-    description,
-    paidBy,
-    sharedby,
-  };
-  group.expenses.push(expense);
-  await group.save();
-  return res
-    .status(200)
-    .json({ message: "Expense added successfully", expense });
 };
 
 const getGroupedSettlements = async (expenses, settlements = []) => {
@@ -333,42 +381,58 @@ export const addSettlement = async (req, res) => {
 };
 
 export const getExpenses = async (req, res) => {
-  const { groupId } = req.query;
-  if (!groupId) {
-    return res.status(400).json({ message: "Group ID is required" });
+  try {
+    const { groupId } = req.query;
+    if (!groupId) {
+      return res.status(400).json({ message: "Group ID is required" });
+    }
+
+    // Fetch the group by ID
+    const group = await Group.findOne({ id: groupId });
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    const groupedSettlements = await getGroupedSettlements(group.expenses, group.settlements || []);
+
+    return res.status(200).json({
+      message: "Expenses retrieved successfully",
+      expenses: group.expenses,
+      balance: groupedSettlements,
+      settlements: group.settlements || []
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
   }
-
-  // Fetch the group by ID
-  const group = await Group.findOne({ id: groupId });
-
-  if (!group) {
-    return res.status(404).json({ message: "Group not found" });
-  }
-
-  const groupedSettlements = await getGroupedSettlements(group.expenses, group.settlements || []);
-
-  return res.status(200).json({
-    message: "Expenses retrieved successfully",
-    expenses: group.expenses,
-    balance: groupedSettlements,
-    settlements: group.settlements || []
-  });
 };
 
 export const getGroupDetails = async (req, res) => {
-  const { groupId } = req.query;
+  try {
+    const { groupId } = req.query;
 
-  if (!groupId) {
-    return res.status(400).json({ message: "Group ID is required" });
+    if (!groupId) {
+      return res.status(400).json({ message: "Group ID is required" });
+    }
+
+    const group = await Group.findOne({ id: groupId });
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    return res.status(200).json({
+      message: "Group details retrieved successfully",
+      group,
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: err.message 
+    });
   }
-
-  const group = await Group.findOne({ id: groupId });
-  if (!group) {
-    return res.status(404).json({ message: "Group not found" });
-  }
-
-  return res.status(200).json({
-    message: "Group details retrieved successfully",
-    group,
-  });
 };
