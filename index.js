@@ -30,7 +30,7 @@ mongoose
     console.error("MongoDB connection error:", err);
   });
 
-  console.log("MONGODB_URI:", process.env.MONGODB_URI);
+  // console.log("MONGODB_URI:", process.env.MONGODB_URI);
 
 
 app.use(express.json());
