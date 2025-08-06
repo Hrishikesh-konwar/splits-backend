@@ -30,6 +30,8 @@ mongoose
     console.error("MongoDB connection error:", err);
   });
 
+
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -49,7 +51,11 @@ app.post("/api/add-settlement", validateUser, addSettlement);
 
 
 app.get("/check", (req,res) => {
- res.status(200).send("server is up and running")
+ res.status(200).send("server is running healthy");
+})
+
+app.get("/", (req,res) => {
+ res.status(200).send("server is up and running");
 })
 
 app.listen(8080, () => {
