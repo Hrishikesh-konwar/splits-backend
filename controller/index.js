@@ -43,6 +43,7 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   const { contact, password } = req.body;
+  console.log("type of contact:", typeof contact);
   if (!contact || !password) {
     return res.status(400).json({ message: "All fields are required" });
   }
