@@ -178,3 +178,24 @@ Access logs with:
 ```bash
 gcloud logs tail --project=YOUR_PROJECT_ID
 ```
+
+
+1. User clicks "Login with Company Account" on Auth0 page
+   ↓
+2. Auth0 shows your custom login form (email/password)
+   ↓  
+3. User enters credentials
+   ↓
+4. Auth0 executes YOUR login script
+   ↓
+5. Your script calls YOUR authentication API
+   ↓
+6. Your API queries YOUR secure cloud database
+   ↓
+7. Your API returns user data to Auth0
+   ↓
+8. Auth0 creates JWT with your user data
+   ↓
+9. JWT sent to your frontend (same as Gmail/Facebook flow!)
+   ↓
+10. Your existing middleware validates token (no changes needed!)
