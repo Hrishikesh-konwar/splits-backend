@@ -119,8 +119,10 @@ export const createGroup = async (req, res) => {
 
     const getMembers = await User.find(
       { contact: { $in: groupMembers } },
-      { name: 1, contact: 1 }
-    ).lean();
+      { name: 1, contact: 1, id: 1 }
+    )
+    .lean()
+    .maxTimeMS(10000);
 
     let missingMembers = [];
 
@@ -171,12 +173,16 @@ export const addMember = async (req, res) => {
     if (!groupId || !memberContact) {
       return res.status(400).json({ message: "All fields are required" });
     }
-    const group = await Group.findOne({ id: groupId });
+    const group = await Group.findOne({ id: groupId })
+      .maxTimeMS(5000);
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    let memberDetails = await User.findOne({ contact: memberContact }).lean();
+    let memberDetails = await User.findOne({ contact: memberContact })
+      .select('id name contact')
+      .lean()
+      .maxTimeMS(5000);
     
     if (!memberDetails) {
       const user = {
@@ -218,7 +224,8 @@ export const removeMember = async (req, res) => {
     if (!groupId || !memberContact) {
       return res.status(400).json({ message: "All fields are required" });
     }
-    const group = await Group.findOne({ id: groupId });
+    const group = await Group.findOne({ id: groupId })
+      .maxTimeMS(5000);
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
     }
@@ -245,7 +252,8 @@ export const addExpense = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const group = await Group.findOne({ id: groupId });
+    const group = await Group.findOne({ id: groupId })
+      .maxTimeMS(5000);
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
     }
@@ -385,7 +393,8 @@ export const addSettlement = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const group = await Group.findOne({ id: groupId });
+    const group = await Group.findOne({ id: groupId })
+      .maxTimeMS(5000);
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
     }
@@ -424,7 +433,8 @@ export const getExpenses = async (req, res) => {
     }
 
     // Fetch the group by ID
-    const group = await Group.findOne({ id: groupId });
+    const group = await Group.findOne({ id: groupId })
+      .maxTimeMS(5000);
 
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
@@ -458,7 +468,8 @@ export const getGroupDetails = async (req, res) => {
       return res.status(400).json({ message: "Group ID is required" });
     }
 
-    const group = await Group.findOne({ id: groupId });
+    const group = await Group.findOne({ id: groupId })
+      .maxTimeMS(5000);
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
     }
