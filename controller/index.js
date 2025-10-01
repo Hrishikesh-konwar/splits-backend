@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 
 import { User } from "../schema/user.js";
 import { Group } from "../schema/groups.js";
-import { get } from "mongoose";
 
 export const register = async (req, res) => {
   try {
@@ -13,7 +12,11 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const existingMember = await User.findOne({ contact });
+    const existingMember = await User.findOne({ contact })
+      .select("_id")
+      .lean()
+      .maxTimeMS(5000);
+
     if (existingMember) {
       return res.status(400).json({ message: "User already exists" });
     }
@@ -42,9 +45,9 @@ export const register = async (req, res) => {
       .json({ message: "User registered successfully", token });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
@@ -52,11 +55,10 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { contact, password } = req.body;
-    console.log("type of contact:", typeof contact);
     if (!contact || !password) {
       return res.status(400).json({ message: "All fields are required" });
     }
-    const user = await User.findOne({ contact });
+    const user = await User.findOne({ contact }).lean().maxTimeMS(5000);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -78,9 +80,9 @@ export const login = async (req, res) => {
       .json({ message: "User logged in successfully", token });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
@@ -88,35 +90,49 @@ export const login = async (req, res) => {
 export const getGroups = async (req, res) => {
   try {
     const user = req.user;
-    const { id, name, contact } = user;
     const groups = await Group.find({
       "members.contact": user.contact,
-    }).lean();
+    })
+      .select("id groupName members")
+      .lean()
+      .maxTimeMS(10000);
 
     return res
       .status(200)
       .json({ message: "Groups retrieved successfully", groups });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
 
 export const createGroup = async (req, res) => {
   try {
-    const { groupName, members } = req.body;
+    const { groupName, groupMembers } = req.body;
     const user = req.user;
-    if (!groupName || !members || members.length === 0) {
+    if (!groupName || !groupMembers || groupMembers.length === 0) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
     const getMembers = await User.find(
-      { contact: { $in: members } },
+      { contact: { $in: groupMembers } },
       { name: 1, contact: 1 }
     ).lean();
+
+    let missingMembers = [];
+
+    if (getMembers.length !== groupMembers.length) {
+      missingMembers = groupMembers.filter(
+        (contact) =>
+          !getMembers.some(
+            (member) => Number(member.contact) === Number(contact)
+          )
+      );
+    }
+
     const currentUser = {
       id: user.id,
       name: user.name,
@@ -130,18 +146,28 @@ export const createGroup = async (req, res) => {
     if (!result) {
       return res.status(500).json({ message: "Group creation failed" });
     }
+
+    if (missingMembers.length > 0) {
+      return res.status(200).json({
+        message: "Group created with some missing members",
+        missingMembers,
+      });
+    }
+
     return res
       .status(200)
       .json({ message: "Group created successfully", group: result });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ message: "Internal server error" , error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: err.message });
   }
 };
 
 export const addMember = async (req, res) => {
   try {
-    const { groupId, memberContact } = req.body;
+    const { groupId, memberContact, memberName } = req.body;
     if (!groupId || !memberContact) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -150,28 +176,38 @@ export const addMember = async (req, res) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    const memberDetails = await User.findOne({ contact: memberContact });
+    let memberDetails = await User.findOne({ contact: memberContact }).lean();
+    
     if (!memberDetails) {
-      return res.status(404).json({ message: "Member not found" });
+      const user = {
+        name: memberName,
+        contact: memberContact,
+        password: await bcrypt.hash(memberContact, 10),
+      };
+
+      const result = await User.create(user);
+      memberDetails = result.toObject();
     }
     const existingMember = group.members.find(
       (member) => member.contact === memberContact
     );
+
     if (existingMember) {
       return res
         .status(400)
         .json({ message: "Member already exists in the group" });
     }
     // Add member to group
+
     group.members.push(memberDetails);
     await group.save();
 
     return res.status(200).json({ message: "Member added successfully" });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
@@ -195,17 +231,12 @@ export const removeMember = async (req, res) => {
     return res.status(200).json({ message: "Member removed successfully" });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
-
-// export const getMembers = async (req, res) => {
-//   console.log(req.body);
-//   res.status(200).json({ message: "Members retrieved successfully" });
-// };
 
 export const addExpense = async (req, res) => {
   try {
@@ -231,9 +262,9 @@ export const addExpense = async (req, res) => {
       .json({ message: "Expense added successfully", expense });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
@@ -271,11 +302,11 @@ const getGroupedSettlements = async (expenses, settlements = []) => {
   // Step 2: Subtract settled amounts
   for (const settlement of settlements) {
     const { from, to, amount, fromName, toName } = settlement;
-    
+
     // Find debtor by contact
     let debtorId = null;
     let creditorId = null;
-    
+
     for (const [userId, userData] of Object.entries(debts)) {
       // Find users by name (since settlement uses contact but debts use user id)
       if (userData.name === fromName) {
@@ -285,11 +316,16 @@ const getGroupedSettlements = async (expenses, settlements = []) => {
         creditorId = userId;
       }
     }
-    
+
     // Reduce the debt by the settled amount
-    if (debtorId && creditorId && debts[debtorId] && debts[debtorId].owes[creditorId]) {
+    if (
+      debtorId &&
+      creditorId &&
+      debts[debtorId] &&
+      debts[debtorId].owes[creditorId]
+    ) {
       debts[debtorId].owes[creditorId].amount -= amount;
-      
+
       // Remove debt if fully settled
       if (debts[debtorId].owes[creditorId].amount <= 0.01) {
         delete debts[debtorId].owes[creditorId];
@@ -344,7 +380,7 @@ const getGroupedSettlements = async (expenses, settlements = []) => {
 export const addSettlement = async (req, res) => {
   try {
     const { groupId, from, to, amount, fromName, toName } = req.body;
-    
+
     if (!groupId || !from || !to || !amount || !fromName || !toName) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -361,21 +397,21 @@ export const addSettlement = async (req, res) => {
       amount,
       fromName,
       toName,
-      settledAt: new Date()
+      settledAt: new Date(),
     };
 
     group.settlements.push(settlement);
     await group.save();
 
-    return res.status(200).json({ 
-      message: "Settlement recorded successfully", 
-      settlement 
+    return res.status(200).json({
+      message: "Settlement recorded successfully",
+      settlement,
     });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
@@ -394,19 +430,22 @@ export const getExpenses = async (req, res) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    const groupedSettlements = await getGroupedSettlements(group.expenses, group.settlements || []);
+    const groupedSettlements = await getGroupedSettlements(
+      group.expenses,
+      group.settlements || []
+    );
 
     return res.status(200).json({
       message: "Expenses retrieved successfully",
       expenses: group.expenses,
       balance: groupedSettlements,
-      settlements: group.settlements || []
+      settlements: group.settlements || [],
     });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };
@@ -430,9 +469,9 @@ export const getGroupDetails = async (req, res) => {
     });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
     });
   }
 };

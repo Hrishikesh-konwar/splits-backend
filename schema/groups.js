@@ -18,8 +18,7 @@ const membersSchema = new mongoose.Schema({
 const expensesSchema = new mongoose.Schema({
   id: {
     type: String,        
-    default: uuidv4,            
-    unique: true,
+    default: uuidv4,
   },
   amount: {
     type: Number,
@@ -43,7 +42,6 @@ const settlementsSchema = new mongoose.Schema({
   id: {
     type: String,
     default: uuidv4,
-    unique: true,
   },
   from: {
     type: String, // Contact number of person who paid
